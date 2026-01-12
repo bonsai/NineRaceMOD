@@ -1,0 +1,12 @@
+{
+  "builds": [
+    {
+      "src": "NINE/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "NINE/dist" }
+    }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Cell = { id: string; color: string } | null;
 
@@ -13,7 +13,6 @@ const COLORS = [
   "#a855f7", "#ec4899", "#f43f5e",
 ];
 
-const key = (r: number, c: number) => `${r},${c}`;
 const inBounds = (r: number, c: number) => r >= 0 && c >= 0 && r < GRID && c < GRID;
 
 function centerTopLeft() {
