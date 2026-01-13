@@ -111,15 +111,22 @@ export default function App() {
   const [moves, setMoves] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [solvedAt, setSolvedAt] = useState<number | null>(null);
 
   const solved = useMemo(() => target.length > 0 && isSolved(board, target), [board, target]);
+
+  useEffect(() => {
+    if (solved && !solvedAt) {
+      setSolvedAt(Date.now());
+    }
+  }, [solved, solvedAt]);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 100);
     return () => window.clearInterval(t);
   }, []);
 
-  const elapsedMs = startedAt ? now - startedAt : 0;
+  const elapsedMs = solvedAt && startedAt ? solvedAt - startedAt : startedAt ? now - startedAt : 0;
 
   const { sr, sc } = centerTopLeft();
 
@@ -144,6 +151,7 @@ export default function App() {
     setBoard(scrambled);
     setMoves(0);
     setStartedAt(null);
+    setSolvedAt(null);
   }
 
   function resetToScramble() {
@@ -152,6 +160,29 @@ export default function App() {
     setBoard(scrambled);
     setMoves(0);
     setStartedAt(null);
+    setSolvedAt(null);
+  }
+
+  function getTilesToMove() {
+    // ヒントモード：次に動かすべきタイルを返す
+    if (solved || target.length === 0) return new Set<number>();
+    
+    const empty = board.findIndex((x) => x === null);
+    const neighbors = neighborsOfEmpty(empty);
+    
+    // 隣接タイルの中で、中央3x3に関連するものをハイライト
+    const { sr, sc } = centerTopLeft();
+    const toMove = new Set<number>();
+    
+    for (const n of neighbors) {
+      const { r, c } = rc(n);
+      // 中央3x3の周辺にあるタイルをハイライト
+      if ((r >= sr - 1 && r < sr + CENTER + 1) || (c >= sc - 1 && c < sc + CENTER + 1)) {
+        toMove.add(n);
+      }
+    }
+    
+    return toMove;
   }
 
   useEffect(() => {
@@ -162,6 +193,32 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }} className="min-h-screen bg-neutral-950 text-neutral-100">
+      <style>{`
+        @keyframes bounce-gentle {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        .animate-bounce {
+          animation: bounce-gentle 0.6s infinite;
+        }
+        @keyframes pop-in {
+          0% {
+            opacity: 0;
+            transform: scale(0.5) translateY(20px);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.1) translateY(-10px);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        .animate-pop-in {
+          animation: pop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+      `}</style>
       <div className="mx-auto max-w-4xl px-4 py-8">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -191,9 +248,9 @@ export default function App() {
           {/* Target */}
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 shadow">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Target（中央3×3）</h2>
+              <h2 className="text-sm font-semibold">Target（中央3×3）</h2>
               {solved ? (
-                <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300">
+                <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300 animate-pulse">
                   CLEARED!
                 </span>
               ) : (
@@ -201,27 +258,31 @@ export default function App() {
               )}
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-1.5">
               {target.map((col, i) => (
                 <div
                   key={i}
-                  className="aspect-square rounded-xl border border-neutral-800"
+                  className="aspect-square rounded-lg border border-neutral-800"
                   style={{ background: col ?? "transparent" }}
                 />
               ))}
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-3 text-sm text-neutral-300">
-              <div className="rounded-xl border border-neutral-800 bg-neutral-950/30 px-3 py-2">
+            <div className="mt-4 flex flex-wrap gap-2 text-xs text-neutral-300">
+              <div className="rounded-lg border border-neutral-800 bg-neutral-950/30 px-2 py-1">
                 Moves: <span className="font-semibold text-neutral-100">{moves}</span>
               </div>
-              <div className="rounded-xl border border-neutral-800 bg-neutral-950/30 px-3 py-2">
+              <div className={`rounded-lg border px-2 py-1 transition-all ${
+                solved 
+                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300 font-semibold shadow-lg shadow-emerald-500/20" 
+                  : "border-neutral-800 bg-neutral-950/30"
+              }`}>
                 Time:{" "}
-                <span className="font-semibold text-neutral-100">
+                <span className="font-semibold">
                   {(elapsedMs / 1000).toFixed(1)}s
                 </span>
               </div>
-              <div className="rounded-xl border border-neutral-800 bg-neutral-950/30 px-3 py-2">
+              <div className="rounded-lg border border-neutral-800 bg-neutral-950/30 px-2 py-1">
                 Empty:{" "}
                 <span className="font-semibold text-neutral-100">
                   {(() => {
@@ -235,44 +296,67 @@ export default function App() {
           </div>
 
           {/* Board */}
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 shadow">
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 shadow relative">
             <h2 className="text-lg font-semibold">Board（{GRID}×{GRID}）</h2>
             <p className="mt-1 text-xs text-neutral-400">
               タップで移動（空きマスに隣接してると動く）
             </p>
 
-            <div
-              className="mt-4 grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${GRID}, minmax(0, 1fr))` }}
-            >
-              {board.map((cell, i) => {
-                const { r, c } = rc(i);
-                const isCenter =
-                  r >= sr && r < sr + CENTER && c >= sc && c < sc + CENTER;
+            <div className="relative">
+              <div
+                className={`mt-4 grid gap-2 transition-all duration-500 ${
+                  solved ? "scale-105 opacity-100" : "scale-100 opacity-100"
+                }`}
+                style={{ gridTemplateColumns: `repeat(${GRID}, minmax(0, 1fr))` }}
+              >
+                {board.map((cell, i) => {
+                  const { r, c } = rc(i);
+                  const isCenter =
+                    r >= sr && r < sr + CENTER && c >= sc && c < sc + CENTER;
 
-                const canMove = (() => {
-                  const empty = board.findIndex((x) => x === null);
-                  return neighborsOfEmpty(empty).includes(i);
-                })();
+                  const canMove = (() => {
+                    const empty = board.findIndex((x) => x === null);
+                    return neighborsOfEmpty(empty).includes(i);
+                  })();
 
-                return (
-                  <button
-                    key={i}
-                    onClick={() => handleTap(i)}
-                    disabled={cell === null || solved}
-                    className={[
-                      "aspect-square rounded-2xl border shadow-sm transition",
-                      isCenter ? "border-neutral-200/70" : "border-neutral-800",
-                      cell === null ? "bg-neutral-950/30" : "",
-                      canMove && cell !== null && !solved ? "ring-2 ring-neutral-200/30" : "",
-                      solved ? "opacity-80" : "hover:brightness-110",
-                    ].join(" ")}
-                    style={{ background: cell?.color ?? "transparent" }}
-                    aria-label={cell ? `tile ${cell.id}` : "empty"}
-                    title={cell ? "Tap to slide" : "Empty"}
-                  />
-                );
-              })}
+                  const tilesToMove = getTilesToMove();
+                  const isHintTile = tilesToMove.has(i);
+
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => handleTap(i)}
+                      disabled={cell === null || solved}
+                      className={[
+                        "aspect-square rounded-2xl border shadow-sm transition-all",
+                        isCenter ? "border-neutral-200/70" : "border-neutral-800",
+                        cell === null ? "bg-neutral-950/30" : "",
+                        isHintTile && !solved ? "ring-2 ring-yellow-400/60 shadow-lg shadow-yellow-400/20" : "",
+                        canMove && cell !== null && !solved ? "ring-2 ring-neutral-200/30" : "",
+                        solved ? "opacity-80" : "hover:brightness-110",
+                        solved && isCenter ? "animate-bounce" : "",
+                      ].join(" ")}
+                      style={{ background: cell?.color ?? "transparent" }}
+                      aria-label={cell ? `tile ${cell.id}` : "empty"}
+                      title={cell ? "Tap to slide" : "Empty"}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Cleared Overlay */}
+              {solved && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="animate-pop-in text-center">
+                    <div className="text-8xl font-black text-emerald-300 drop-shadow-2xl" style={{
+                      textShadow: "0 0 30px rgba(16, 185, 129, 0.8), 0 0 60px rgba(16, 185, 129, 0.4)"
+                    }}>
+                      CLEARED!
+                    </div>
+                    <div className="mt-2 text-2xl font-bold text-emerald-200/80">🎉</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-4 text-xs text-neutral-400">
